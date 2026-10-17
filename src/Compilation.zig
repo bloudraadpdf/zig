@@ -1540,6 +1540,7 @@ pub const CreateOptions = struct {
     linker_z_nocopyreloc: bool = false,
     linker_z_common_page_size: ?u64 = null,
     linker_z_max_page_size: ?u64 = null,
+    linker_z_dead_relocs: []const []const u8 = &.{},
     linker_tsaware: bool = false,
     linker_nxcompat: bool = false,
     linker_dynamicbase: bool = true,
@@ -1673,6 +1674,7 @@ const RtStrat = enum { none, lib, obj, zcu };
 
 pub const CreateDiagnostic = union(enum) {
     export_table_import_table_conflict,
+    dead_reloc_requires_elf_lld,
     emit_h_without_zcu,
     illegal_zig_import,
     cross_libc_unavailable,
@@ -1689,6 +1691,7 @@ pub const CreateDiagnostic = union(enum) {
     pub fn format(diag: CreateDiagnostic, w: *Writer) Writer.Error!void {
         switch (diag) {
             .export_table_import_table_conflict => try w.writeAll("'--import-table' and '--export-table' cannot be used together"),
+            .dead_reloc_requires_elf_lld => try w.writeAll("-z dead-reloc-in-nonalloc requires the ELF LLD linker"),
             .emit_h_without_zcu => try w.writeAll("cannot emit C header with no Zig source files"),
             .illegal_zig_import => try w.writeAll("this compiler implementation does not support importing the root source file of a provided module"),
             .cross_libc_unavailable => try w.writeAll("unable to provide libc for this target"),
@@ -1737,6 +1740,11 @@ pub fn create(gpa: Allocator, arena: Allocator, io: Io, diag: *CreateDiagnostic,
     const have_zcu = options.config.have_zcu;
     const use_llvm = options.config.use_llvm;
     const target = &options.root_mod.resolved_target.result;
+    if (options.linker_z_dead_relocs.len != 0 and
+        (!options.config.use_lld or target.ofmt != .elf))
+    {
+        return diag.fail(.dead_reloc_requires_elf_lld);
+    }
 
     const comp: *Compilation = comp: {
         // We put the `Compilation` itself in the arena. Freeing the arena will free the module.
@@ -2206,6 +2214,7 @@ pub fn create(gpa: Allocator, arena: Allocator, io: Io, diag: *CreateDiagnostic,
             .z_relro = options.linker_z_relro,
             .z_common_page_size = options.linker_z_common_page_size,
             .z_max_page_size = options.linker_z_max_page_size,
+            .z_dead_relocs = options.linker_z_dead_relocs,
             .lib_directories = options.lib_directories,
             .rpath_list = options.rpath_list,
             .symbol_wrap_set = options.symbol_wrap_set,
@@ -3464,6 +3473,7 @@ fn addNonIncrementalStuffToCacheManifest(comp: *Compilation, man: *Cache.Manifes
     man.hash.add(opts.z_relro);
     man.hash.add(opts.z_common_page_size orelse 0);
     man.hash.add(opts.z_max_page_size orelse 0);
+    man.hash.addListOfBytes(opts.z_dead_relocs);
     man.hash.add(opts.hash_style);
     man.hash.add(opts.compress_debug_sections);
     man.hash.addOptional(opts.sort_section);

@@ -92,6 +92,7 @@ pub const Elf = struct {
     z_relro: bool,
     z_common_page_size: ?u64,
     z_max_page_size: ?u64,
+    z_dead_relocs: []const []const u8,
     rpath_list: []const []const u8,
     symbol_wrap_set: []const []const u8,
     soname: ?[]const u8,
@@ -149,6 +150,7 @@ pub const Elf = struct {
             .z_relro = options.z_relro,
             .z_common_page_size = options.z_common_page_size,
             .z_max_page_size = options.z_max_page_size,
+            .z_dead_relocs = options.z_dead_relocs,
             .rpath_list = options.rpath_list,
             .symbol_wrap_set = options.symbol_wrap_set.keys(),
             .soname = options.soname,
@@ -1009,6 +1011,11 @@ fn elfLink(lld: *Lld, arena: Allocator) !void {
         if (elf.z_max_page_size) |size| {
             try argv.append("-z");
             try argv.append(try arena.print("max-page-size={d}", .{size}));
+        }
+
+        for (elf.z_dead_relocs) |rule| {
+            try argv.append("-z");
+            try argv.append(rule);
         }
 
         if (getLDMOption(target)) |ldm| {

@@ -724,6 +724,7 @@ const compile_usage =
     \\    norelro                      Don't force all relocations to be read-only after processing
     \\    common-page-size=[bytes]     Set the common page size for ELF binaries
     \\    max-page-size=[bytes]        Set the max page size for ELF binaries
+    \\    dead-reloc-in-nonalloc=[glob]=[value] Set discarded-section relocation values (ELF LLD)
     \\  -dynamic                       Force output to be dynamically linked
     \\  -static                        Force output to be statically linked
     \\  -Bsymbolic                     Bind global references locally
@@ -997,6 +998,7 @@ fn buildOutputType(
     var linker_z_relro = true;
     var linker_z_common_page_size: ?u64 = null;
     var linker_z_max_page_size: ?u64 = null;
+    var linker_z_dead_relocs: std.ArrayList([]const u8) = .empty;
     var linker_tsaware = false;
     var linker_nxcompat = false;
     var linker_dynamicbase = true;
@@ -1758,6 +1760,8 @@ fn buildOutputType(
                             linker_z_relro = false;
                         } else if (prefixedIntArg(z_arg, "common-page-size=")) |int| {
                             linker_z_common_page_size = int;
+                        } else if (mem.startsWith(u8, z_arg, "dead-reloc-in-nonalloc=")) {
+                            try linker_z_dead_relocs.append(arena, z_arg);
                         } else if (prefixedIntArg(z_arg, "max-page-size=")) |int| {
                             linker_z_max_page_size = int;
                         } else {
@@ -2249,7 +2253,8 @@ fn buildOutputType(
                             // Must be prefixed with 1 or 2 dashes.
                             if (linker_arg.len >= 3 and
                                 linker_arg[0] == '-' and
-                                linker_arg[2] != '-')
+                                linker_arg[2] != '-' and
+                                !mem.startsWith(u8, linker_arg, "-zdead-reloc-in-nonalloc="))
                             {
                                 if (mem.findScalar(u8, linker_arg, '=')) |equals_pos| {
                                     const key = linker_arg[0..equals_pos];
@@ -2458,7 +2463,9 @@ fn buildOutputType(
 
                         // Handle joined args like `--dependency-file=foo.d`.
                         // Must be prefixed with 1 or 2 dashes.
-                        if (it.only_arg.len >= 3 and it.only_arg[0] == '-' and it.only_arg[2] != '-') {
+                        if (it.only_arg.len >= 3 and it.only_arg[0] == '-' and it.only_arg[2] != '-' and
+                            !mem.startsWith(u8, it.only_arg, "-zdead-reloc-in-nonalloc="))
+                        {
                             if (mem.findScalar(u8, it.only_arg, '=')) |equals_pos| {
                                 const key = it.only_arg[0..equals_pos];
                                 const value = it.only_arg[equals_pos + 1 ..];
@@ -2829,6 +2836,8 @@ fn buildOutputType(
                         stack_size = parseStackSize(rest);
                     } else if (prefixedIntArg(z_arg, "common-page-size=")) |int| {
                         linker_z_common_page_size = int;
+                    } else if (mem.startsWith(u8, z_arg, "dead-reloc-in-nonalloc=")) {
+                        try linker_z_dead_relocs.append(arena, z_arg);
                     } else if (prefixedIntArg(z_arg, "max-page-size=")) |int| {
                         linker_z_max_page_size = int;
                     } else {
@@ -3708,6 +3717,7 @@ fn buildOutputType(
         .linker_z_relro = linker_z_relro,
         .linker_z_common_page_size = linker_z_common_page_size,
         .linker_z_max_page_size = linker_z_max_page_size,
+        .linker_z_dead_relocs = linker_z_dead_relocs.items,
         .linker_tsaware = linker_tsaware,
         .linker_nxcompat = linker_nxcompat,
         .linker_dynamicbase = linker_dynamicbase,
