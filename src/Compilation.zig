@@ -1541,6 +1541,7 @@ pub const CreateOptions = struct {
     linker_z_common_page_size: ?u64 = null,
     linker_z_max_page_size: ?u64 = null,
     linker_z_dead_relocs: []const []const u8 = &.{},
+    linker_fix_cortex_a53_843419: bool = false,
     linker_tsaware: bool = false,
     linker_nxcompat: bool = false,
     linker_dynamicbase: bool = true,
@@ -1675,6 +1676,7 @@ const RtStrat = enum { none, lib, obj, zcu };
 pub const CreateDiagnostic = union(enum) {
     export_table_import_table_conflict,
     dead_reloc_requires_elf_lld,
+    cortex_a53_fix_requires_aarch64_elf_lld,
     emit_h_without_zcu,
     illegal_zig_import,
     cross_libc_unavailable,
@@ -1692,6 +1694,7 @@ pub const CreateDiagnostic = union(enum) {
         switch (diag) {
             .export_table_import_table_conflict => try w.writeAll("'--import-table' and '--export-table' cannot be used together"),
             .dead_reloc_requires_elf_lld => try w.writeAll("-z dead-reloc-in-nonalloc requires the ELF LLD linker"),
+            .cortex_a53_fix_requires_aarch64_elf_lld => try w.writeAll("--fix-cortex-a53-843419 requires the AArch64 ELF LLD linker"),
             .emit_h_without_zcu => try w.writeAll("cannot emit C header with no Zig source files"),
             .illegal_zig_import => try w.writeAll("this compiler implementation does not support importing the root source file of a provided module"),
             .cross_libc_unavailable => try w.writeAll("unable to provide libc for this target"),
@@ -1744,6 +1747,12 @@ pub fn create(gpa: Allocator, arena: Allocator, io: Io, diag: *CreateDiagnostic,
         (!options.config.use_lld or target.ofmt != .elf))
     {
         return diag.fail(.dead_reloc_requires_elf_lld);
+    }
+    if (options.linker_fix_cortex_a53_843419 and
+        (!options.config.use_lld or target.ofmt != .elf or
+            (target.cpu.arch != .aarch64 and target.cpu.arch != .aarch64_be)))
+    {
+        return diag.fail(.cortex_a53_fix_requires_aarch64_elf_lld);
     }
 
     const comp: *Compilation = comp: {
@@ -2215,6 +2224,7 @@ pub fn create(gpa: Allocator, arena: Allocator, io: Io, diag: *CreateDiagnostic,
             .z_common_page_size = options.linker_z_common_page_size,
             .z_max_page_size = options.linker_z_max_page_size,
             .z_dead_relocs = options.linker_z_dead_relocs,
+            .fix_cortex_a53_843419 = options.linker_fix_cortex_a53_843419,
             .lib_directories = options.lib_directories,
             .rpath_list = options.rpath_list,
             .symbol_wrap_set = options.symbol_wrap_set,
@@ -3474,6 +3484,7 @@ fn addNonIncrementalStuffToCacheManifest(comp: *Compilation, man: *Cache.Manifes
     man.hash.add(opts.z_common_page_size orelse 0);
     man.hash.add(opts.z_max_page_size orelse 0);
     man.hash.addListOfBytes(opts.z_dead_relocs);
+    man.hash.add(opts.fix_cortex_a53_843419);
     man.hash.add(opts.hash_style);
     man.hash.add(opts.compress_debug_sections);
     man.hash.addOptional(opts.sort_section);

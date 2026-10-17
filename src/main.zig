@@ -711,6 +711,7 @@ const compile_usage =
     \\  --eh-frame-hdr                 Enable C++ exception handling by passing --eh-frame-hdr to linker
     \\  --no-eh-frame-hdr              Disable C++ exception handling by passing --no-eh-frame-hdr to linker
     \\  --emit-relocs                  Enable output of relocation sections for post build tools
+    \\  --fix-cortex-a53-843419         Apply the Cortex-A53 erratum 843419 fix (AArch64 ELF LLD)
     \\  -z [arg]                       Set linker extension flags
     \\    nodelete                     Indicate that the object cannot be deleted from a process
     \\    notext                       Permit read-only relocations in read-only segments
@@ -999,6 +1000,7 @@ fn buildOutputType(
     var linker_z_common_page_size: ?u64 = null;
     var linker_z_max_page_size: ?u64 = null;
     var linker_z_dead_relocs: std.ArrayList([]const u8) = .empty;
+    var linker_fix_cortex_a53_843419 = false;
     var linker_tsaware = false;
     var linker_nxcompat = false;
     var linker_dynamicbase = true;
@@ -1726,6 +1728,8 @@ fn buildOutputType(
                         linker_dynamicbase = true;
                     } else if (mem.eql(u8, arg, "--no-dynamicbase")) {
                         linker_dynamicbase = false;
+                    } else if (mem.eql(u8, arg, "--fix-cortex-a53-843419")) {
+                        linker_fix_cortex_a53_843419 = true;
                     } else if (mem.eql(u8, arg, "--emit-relocs")) {
                         link_emit_relocs = true;
                     } else if (mem.eql(u8, arg, "-fallow-shlib-undefined")) {
@@ -2884,6 +2888,8 @@ fn buildOutputType(
                     warn("auto-image-base options are unimplemented and ignored", .{});
                 } else if (mem.eql(u8, arg, "-T") or mem.eql(u8, arg, "--script")) {
                     linker_script = linker_args_it.nextOrFatal();
+                } else if (mem.eql(u8, arg, "--fix-cortex-a53-843419")) {
+                    linker_fix_cortex_a53_843419 = true;
                 } else if (mem.eql(u8, arg, "--eh-frame-hdr")) {
                     link_eh_frame_hdr = true;
                 } else if (mem.eql(u8, arg, "--no-eh-frame-hdr")) {
@@ -3718,6 +3724,7 @@ fn buildOutputType(
         .linker_z_common_page_size = linker_z_common_page_size,
         .linker_z_max_page_size = linker_z_max_page_size,
         .linker_z_dead_relocs = linker_z_dead_relocs.items,
+        .linker_fix_cortex_a53_843419 = linker_fix_cortex_a53_843419,
         .linker_tsaware = linker_tsaware,
         .linker_nxcompat = linker_nxcompat,
         .linker_dynamicbase = linker_dynamicbase,

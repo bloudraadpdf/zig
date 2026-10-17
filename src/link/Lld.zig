@@ -93,6 +93,7 @@ pub const Elf = struct {
     z_common_page_size: ?u64,
     z_max_page_size: ?u64,
     z_dead_relocs: []const []const u8,
+    fix_cortex_a53_843419: bool,
     rpath_list: []const []const u8,
     symbol_wrap_set: []const []const u8,
     soname: ?[]const u8,
@@ -151,6 +152,7 @@ pub const Elf = struct {
             .z_common_page_size = options.z_common_page_size,
             .z_max_page_size = options.z_max_page_size,
             .z_dead_relocs = options.z_dead_relocs,
+            .fix_cortex_a53_843419 = options.fix_cortex_a53_843419,
             .rpath_list = options.rpath_list,
             .symbol_wrap_set = options.symbol_wrap_set.keys(),
             .soname = options.soname,
@@ -1016,6 +1018,9 @@ fn elfLink(lld: *Lld, arena: Allocator) !void {
         for (elf.z_dead_relocs) |rule| {
             try argv.append("-z");
             try argv.append(rule);
+        }
+        if (elf.fix_cortex_a53_843419) {
+            try argv.append("--fix-cortex-a53-843419");
         }
 
         if (getLDMOption(target)) |ldm| {

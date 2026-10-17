@@ -436,6 +436,7 @@ pub const File = struct {
         z_common_page_size: ?u64,
         z_max_page_size: ?u64,
         z_dead_relocs: []const []const u8,
+        fix_cortex_a53_843419: bool,
         tsaware: bool,
         nxcompat: bool,
         dynamicbase: bool,
